@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    /* Custom styles for better visibility and professional look */
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+    }
+    
+    .page-container {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+    
+    .recommendation-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2.5rem 2rem;
+        color: white;
+    }
+    
+    .card-header h1 {
+        color: white !important;
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .card-header .lead {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-size: 1.1rem;
+    }
+    
+    .card-body {
+        padding: 2.5rem 2rem;
+    }
+    
+    .form-label {
+        color: #2d3748;
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .form-select {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+    
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        color: white;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .btn-secondary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(72, 187, 120, 0.3);
+        color: white;
+    }
+    
+    .selected-movie-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 2rem 0;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .selected-movie-section h3 {
+        color: #2d3748;
+        font-size: 1.5rem;
+    }
+    
+    .selected-movie-section .text-primary {
+        color: #764ba2 !important;
+        font-weight: 600;
+    }
+    
+    .recommendations-section h2 {
+        color: #2d3748;
+        margin-bottom: 2rem;
+    }
+    
+    .movie-recommendation-card {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        animation: fadeInUp 0.6s ease both;
+        height: 100%;
+    }
+    
+    .movie-recommendation-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+    
+    .movie-poster {
+        position: relative;
+        overflow: hidden;
+        background: #f7fafc;
+    }
+    
+    .movie-poster img {
+        width: 100%;
+        height: 400px;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    
+    .movie-recommendation-card:hover .movie-poster img {
+        transform: scale(1.05);
+    }
+    
+    .movie-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 1rem;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+    }
+    
+    .similarity-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .movie-info {
+        padding: 1.5rem;
+        background: white;
+    }
+    
+    .movie-title {
+        color: #2d3748;
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        min-height: 2.4rem;
+    }
+    
+    .rating-stars {
+        font-size: 1.1rem;
+    }
+    
+    .spinner-border {
+        border-width: 0.3em;
+    }
+    
+    .error-message {
+        background: #fed7d7;
+        color: #742a2a;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+        display: none;
+    }
+    
+    .home-button-container {
+        text-align: center;
+        margin-top: 3rem;
+        padding-bottom: 2rem;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+<div class="page-container">
+    <div class="container py-5">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="recommendation-card">
+                    <div class="card-header text-center">
+                        <h1 class="display-5 fw-bold">
+                            <i class="fas fa-film me-3"></i>Movie Recommendations
+                        </h1>
+                        <p class="lead">
+                            Select a movie you like and discover 6 similar movies you might enjoy!
+                        </p>
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="search-section">
+                            <label for="movieSelect" class="form-label fw-bold">
+                                <i class="fas fa-search me-2"></i>Choose a movie:
+                            </label>
+                            <select id="movieSelect" class="form-select form-select-lg">
+                                <option value="">Select a movie...</option>
+                                {% for movie in movies %}
+                                <option value="{{ movie }}">{{ movie }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <button id="getRecommendations" class="btn btn-primary btn-lg w-100 mt-3" disabled>
+                                <i class="fas fa-magic me-2"></i>Get Recommendations
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Message -->
+                <div id="errorMessage" class="error-message">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="errorText">An error occurred. Please try again.</span>
+                </div>
+                
+                <!-- Loading Animation -->
+                <div id="loadingSection" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Finding the perfect movies for you...</p>
+                </div>
+                
+                <!-- Selected Movie Display -->
+                <div id="selectedMovieSection" class="selected-movie-section" style="display: none;">
+                    <h3 class="text-center mb-4">
+                        <i class="fas fa-thumbs-up me-2 text-success"></i>
+                        Based on your choice: <span id="selectedMovieName" class="text-primary"></span>
+                    </h3>
+                </div>
+                
+                <!-- Recommendations Display -->
+                <div id="recommendationsSection" class="recommendations-section" style="display: none;">
+                    <h2 class="text-center mb-4">
+                        <i class="fas fa-star me-2 text-warning"></i>
+                        Recommended Movies for You
+                    </h2>
+                    <div id="recommendationsContainer" class="row g-4">
+                        <!-- Recommendations will be populated here -->
+                    </div>
+                </div>
+                
+                <!-- Home Button -->
+                <div class="home-button-container" id="homeButtonContainer" style="display: none;">
+                    <a href="/" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-home me-2"></i>Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const movieSelect = document.getElementById('movieSelect');
+    const getRecommendationsBtn = document.getElementById('getRecommendations');
+    const loadingSection = document.getElementById('loadingSection');
+    const selectedMovieSection = document.getElementById('selectedMovieSection');
+    const recommendationsSection = document.getElementById('recommendationsSection');
+    const selectedMovieName = document.getElementById('selectedMovieName');
+    const recommendationsContainer = document.getElementById('recommendationsContainer');
+    const errorMessage = document.getElementById('errorMessage');
+    const errorText = document.getElementById('errorText');
+    const homeButtonContainer = document.getElementById('homeButtonContainer');
+    
+    // Enable button when movie is selected
+    movieSelect.addEventListener('change', function() {
+        getRecommendationsBtn.disabled = this.value === '';
+        errorMessage.style.display = 'none';
+    });
+    
+    // Get recommendations
+    getRecommendationsBtn.addEventListener('click', function() {
+        const selectedMovie = movieSelect.value;
+        if (!selectedMovie) return;
+        
+        // Hide error message and previous results
+        errorMessage.style.display = 'none';
+        homeButtonContainer.style.display = 'none';
+        
+        // Show loading
+        loadingSection.style.display = 'block';
+        selectedMovieSection.style.display = 'none';
+        recommendationsSection.style.display = 'none';
+        
+        // Fetch recommendations
+        fetch('/get_recommendations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ movie: selectedMovie })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            loadingSection.style.display = 'none';
+            
+            if (data.success && data.recommendations && data.recommendations.length > 0) {
+                selectedMovieName.textContent = data.selected_movie;
+                selectedMovieSection.style.display = 'block';
+                
+                // Clear previous recommendations
+                recommendationsContainer.innerHTML = '';
+                
+                // Add new recommendations (6 movies in 2 rows of 3)
+                data.recommendations.forEach((movie, index) => {
+                    const movieCard = createMovieCard(movie, index);
+                    recommendationsContainer.appendChild(movieCard);
+                });
+                
+                recommendationsSection.style.display = 'block';
+                homeButtonContainer.style.display = 'block';
+                
+                // Smooth scroll to recommendations
+                recommendationsSection.scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            } else {
+                errorText.textContent = 'No recommendations found for this movie. Please try another movie.';
+                errorMessage.style.display = 'block';
+                homeButtonContainer.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            loadingSection.style.display = 'none';
+            errorText.textContent = `Error: ${error.message}. Please check if the server is running and try again.`;
+            errorMessage.style.display = 'block';
+            homeButtonContainer.style.display = 'block';
+        });
+    });
+    
+    function createMovieCard(movie, index) {
+        const col = document.createElement('div');
+        col.className = 'col-lg-4 col-md-6';
+        
+        // Handle missing data gracefully
+        const posterUrl = movie.poster_url || 'https://via.placeholder.com/500x750/333/fff?text=No+Poster';
+        const title = movie.title || 'Unknown Title';
+        const similarityScore = movie.similarity_score || 0;
+        
+        col.innerHTML = `
+            <div class="movie-recommendation-card" style="animation-delay: ${index * 0.1}s">
+                <div class="movie-poster">
+                    <img src="${posterUrl}" 
+                         alt="${title}" 
+                         class="img-fluid rounded"
+                         onerror="this.src='https://via.placeholder.com/500x750/333/fff?text=No+Poster'">
+                    <div class="movie-overlay">
+                        <div class="similarity-badge">
+                            <i class="fas fa-percentage me-1"></i>
+                            ${(similarityScore * 100).toFixed(1)}% Match
+                        </div>
+                    </div>
+                </div>
+                <div class="movie-info">
+                    <h5 class="movie-title">${title}</h5>
+                </div>
+            </div>
+        `;
+        
+        return col;
+    }
+});
+</script>
+{% endblock %}
