@@ -1,107 +1,134 @@
 import os
-import gdown
+import requests
 import logging
 import pickle
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def download_from_github_release(repo_owner, repo_name, tag, filename):
+    """Download file from GitHub releases"""
+    try:
+        logger.info(f"📥 Downloading {filename} from GitHub releases...")
+        
+        # GitHub releases direct download URL
+        url = f"https://github.com/{repo_owner}/{repo_name}/releases/download/{tag}/{filename}"
+        logger.info(f"Download URL: {url}")
+        
+        response = requests.get(url, stream=True, timeout=120)
+        
+        if response.status_code == 404:
+            logger.error(f"❌ File not found at {url}")
+            logger.info(f"Please check if the file is uploaded to releases with tag '{tag}'")
+            return False
+        
+        response.raise_for_status()
+        
+        # Get file size from headers
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded_size = 0
+        
+        logger.info(f"File size: {total_size / (1024*1024):.1f} MB")
+        
+        with open(filename, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    file.write(chunk)
+                    downloaded_size += len(chunk)
+                    
+                    # Log progress every 10MB
+                    if downloaded_size % (10 * 1024 * 1024) == 0:
+                        progress = (downloaded_size / total_size) * 100 if total_size > 0 else 0
+                        logger.info(f"Progress: {progress:.1f}% ({downloaded_size / (1024*1024):.1f} MB)")
+        
+        final_size = os.path.getsize(filename)
+        logger.info(f"✅ Successfully downloaded {filename} ({final_size / (1024*1024):.1f} MB)")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error downloading {filename}: {e}")
+        if os.path.exists(filename):
+            os.remove(filename)
+        return False
+
 def verify_pickle_file(filename):
     """Verify that the downloaded file is a valid pickle file"""
     try:
         with open(filename, 'rb') as f:
-            # Just check if we can load the first few bytes without loading the entire file
-            f.read(10)  # Read first 10 bytes to check if it's binary
-            f.seek(0)   # Reset file pointer
-            # For very large files, don't load entirely, just check the header
             header = f.read(10)
-            if header.startswith(b'\x80\x03') or header.startswith(b'\x80\x04') or header.startswith(b'\x80\x05'):
-                logger.info(f"✓ {filename} appears to be a valid pickle file")
-                return True
-        return False
-    except Exception as e:
-        logger.error(f"✗ {filename} is not a valid pickle file: {e}")
-        return False
-
-def download_with_gdown(file_id, filename, fuzzy=True):
-    """Download file using gdown with better error handling"""
-    try:
-        logger.info(f"Attempting to download {filename} using gdown...")
-        
-        # Try multiple URL formats
-        urls_to_try = [
-            f'https://drive.google.com/uc?id={file_id}',
-            f'https://drive.google.com/file/d/{file_id}/view?usp=sharing'
-        ]
-        
-        for url in urls_to_try:
-            try:
-                logger.info(f"Trying URL: {url}")
-                gdown.download(url, filename, quiet=False, fuzzy=fuzzy)
+            
+        if header.startswith(b'\x80'):  # Pickle protocol header
+            logger.info(f"✅ {filename} is a valid pickle file")
+            return True
+        else:
+            logger.error(f"❌ {filename} doesn't have valid pickle header")
+            return False
                 
-                if os.path.exists(filename) and os.path.getsize(filename) > 1000:  # File should be larger than 1KB
-                    if verify_pickle_file(filename):
-                        return True
-                    else:
-                        logger.warning(f"Downloaded file is not a valid pickle, trying next URL...")
-                        os.remove(filename)
-                else:
-                    logger.warning(f"Download failed or file too small, trying next URL...")
-                    if os.path.exists(filename):
-                        os.remove(filename)
-            except Exception as e:
-                logger.warning(f"gdown failed with URL {url}: {e}")
-                if os.path.exists(filename):
-                    os.remove(filename)
-                continue
-        
-        return False
-        
     except Exception as e:
-        logger.error(f"Error with gdown for {filename}: {e}")
+        logger.error(f"❌ Error verifying {filename}: {e}")
         return False
 
 def download_models():
-    """Download large model files from Google Drive"""
+    """Download models from GitHub releases"""
+    
+    # Your GitHub repository details
+    REPO_OWNER = "ParshvCrafts"
+    REPO_NAME = "Movie-Recommendation-System"
+    TAG = "v1.0.0"  # Change this to match your release tag
     
     models = {
-        'movies.pkl': {
-            'file_id': '1DRKYFjnFUjebFodUiz_Vp2fnmcSnJMta'
-        },
-        'similarity.pkl': {
-            'file_id': '1tYFyLDpDnIEzPSt3Az_Y7xL7BUR8jsF1'
-        }
+        'similarity.pkl': True  # Required file
     }
     
     all_downloaded = True
     
-    for filename, info in models.items():
+    for filename, required in models.items():
+        # Skip if file exists and is valid
         if os.path.exists(filename) and verify_pickle_file(filename):
             file_size = os.path.getsize(filename) / (1024 * 1024)
-            logger.info(f"{filename} already exists and is valid ({file_size:.1f} MB)")
+            logger.info(f"✅ {filename} already exists and is valid ({file_size:.1f} MB)")
             continue
         
+        # Remove invalid file if exists
         if os.path.exists(filename):
-            logger.warning(f"Removing invalid {filename}")
+            logger.warning(f"🗑️ Removing invalid/corrupted {filename}")
             os.remove(filename)
         
-        logger.info(f"Downloading {filename}...")
-        success = download_with_gdown(info['file_id'], filename)
+        # Download the file
+        success = download_from_github_release(REPO_OWNER, REPO_NAME, TAG, filename)
         
-        if not success:
-            logger.error(f"Failed to download {filename}")
+        if success:
+            # Verify the downloaded file
+            if verify_pickle_file(filename):
+                logger.info(f"✅ {filename} downloaded and verified successfully")
+            else:
+                logger.error(f"❌ {filename} downloaded but verification failed")
+                if os.path.exists(filename):
+                    os.remove(filename)
+                success = False
+        
+        if not success and required:
+            logger.error(f"❌ Failed to download required file {filename}")
             all_downloaded = False
-        else:
-            file_size = os.path.getsize(filename) / (1024 * 1024)
-            logger.info(f"✅ Successfully downloaded {filename} ({file_size:.1f} MB)")
     
     return all_downloaded
 
 if __name__ == "__main__":
-    logger.info("Starting model download process...")
+    logger.info("🚀 Starting model download from GitHub releases...")
+    
     success = download_models()
     
     if success:
-        logger.info("✅ All models ready!")
+        logger.info("✅ All models downloaded and verified successfully!")
     else:
         logger.error("❌ Model download failed!")
+        logger.info("""
+        📋 Instructions to upload to GitHub releases:
+        
+        1. Go to: https://github.com/ParshvCrafts/Movie-Recommendation-System
+        2. Click 'Releases' (on the right sidebar)
+        3. Click 'Create a new release'
+        4. Tag version: v1.0.0
+        5. Upload 'similarity.pkl' as an asset
+        6. Click 'Publish release'
+        """)
