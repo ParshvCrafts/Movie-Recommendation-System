@@ -2,33 +2,66 @@ import os
 import requests
 import logging
 from pathlib import Path
+import pickle
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def download_file(url, filename, chunk_size=8192):
-    """Download a file from URL with progress tracking"""
+def extract_file_id_from_url(url):
+    """Extract Google Drive file ID from sharing URL"""
+    if 'drive.google.com' in url:
+        if '/file/d/' in url:
+            # Extract ID from URL like: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+            return url.split('/file/d/')[1].split('/')[0]
+        elif 'id=' in url:
+            # Extract ID from URL like: https://drive.google.com/uc?id=FILE_ID
+            return url.split('id=')[1].split('&')[0]
+    return None
+
+def download_from_google_drive(file_id, filename):
+    """Download file from Google Drive using file ID"""
     try:
-        logger.info(f"Downloading {filename}...")
+        logger.info(f"Downloading {filename} from Google Drive...")
         
-        response = requests.get(url, stream=True, timeout=30)
+        # Use the direct download URL format
+        url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        
+        session = requests.Session()
+        response = session.get(url, stream=True, timeout=30)
+        
+        # Check if we need to handle the virus scan warning
+        if 'virus scan warning' in response.text.lower() or 'download_warning' in response.text:
+            # Get the download confirmation token
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    params = {'id': file_id, 'export': 'download', 'confirm': value}
+                    response = session.get(url, params=params, stream=True, timeout=30)
+                    break
+        
         response.raise_for_status()
+        
+        # Check if we actually got file content (not HTML)
+        content_type = response.headers.get('content-type', '')
+        if 'text/html' in content_type:
+            logger.error(f"Received HTML instead of file content for {filename}")
+            return False
         
         total_size = int(response.headers.get('content-length', 0))
         downloaded_size = 0
         
         with open(filename, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=chunk_size):
+            for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     file.write(chunk)
                     downloaded_size += len(chunk)
                     
                     if total_size > 0:
                         progress = (downloaded_size / total_size) * 100
-                        logger.info(f"Progress: {progress:.1f}%")
+                        if downloaded_size % (1024 * 1024) == 0:  # Log every MB
+                            logger.info(f"Progress: {progress:.1f}%")
         
-        logger.info(f"Successfully downloaded {filename}")
+        logger.info(f"Successfully downloaded {filename} ({downloaded_size / (1024*1024):.1f} MB)")
         return True
         
     except Exception as e:
@@ -37,46 +70,60 @@ def download_file(url, filename, chunk_size=8192):
             os.remove(filename)
         return False
 
+def verify_pickle_file(filename):
+    """Verify that the downloaded file is a valid pickle file"""
+    try:
+        with open(filename, 'rb') as f:
+            # Try to load just the first part to verify it's a valid pickle
+            pickle.load(f)
+        logger.info(f"✓ {filename} is a valid pickle file")
+        return True
+    except Exception as e:
+        logger.error(f"✗ {filename} is not a valid pickle file: {e}")
+        return False
+
 def download_models():
     """Download large model files"""
     
-    # Define your model URLs here
-    # Option 1: Google Drive URLs (replace with your actual file IDs)
+    # Your Google Drive sharing URLs converted to file IDs
     models = {
         'movies.pkl': {
-            'url': 'https://drive.google.com/file/d/1DRKYFjnFUjebFodUiz_Vp2fnmcSnJMta/view?usp=sharing',
-            'size_mb': 1  # Approximate size in MB
+            'file_id': '1DRKYFjnFUjebFodUiz_Vp2fnmcSnJMta',  # Extracted from your URL
+            'size_mb': 1
         },
         'similarity.pkl': {
-            'url': 'https://drive.google.com/file/d/1tYFyLDpDnIEzPSt3Az_Y7xL7BUR8jsF1/view?usp=sharing',
-            'size_mb': 100  # Approximate size in MB
+            'file_id': '1tYFyLDpDnIEzPSt3Az_Y7xL7BUR8jsF1',  # Extracted from your URL
+            'size_mb': 100
         }
     }
-    
-    # Option 2: Direct URLs (if you host them elsewhere)
-    # models = {
-    #     'movies.pkl': {
-    #         'url': 'https://your-server.com/models/movies.pkl',
-    #         'size_mb': 1
-    #     },
-    #     'similarity.pkl': {
-    #         'url': 'https://your-server.com/models/similarity.pkl',
-    #         'size_mb': 100
-    #     }
-    # }
     
     all_downloaded = True
     
     for filename, info in models.items():
         if not os.path.exists(filename):
             logger.info(f"{filename} not found. Downloading...")
-            success = download_file(info['url'], filename)
+            success = download_from_google_drive(info['file_id'], filename)
+            if success:
+                # Verify the downloaded file is a valid pickle
+                if not verify_pickle_file(filename):
+                    logger.error(f"Downloaded {filename} is corrupted, removing...")
+                    os.remove(filename)
+                    success = False
+            
             if not success:
                 all_downloaded = False
                 logger.error(f"Failed to download {filename}")
         else:
             file_size = os.path.getsize(filename) / (1024 * 1024)  # Size in MB
             logger.info(f"{filename} already exists ({file_size:.1f} MB)")
+            
+            # Verify existing file is valid
+            if not verify_pickle_file(filename):
+                logger.warning(f"Existing {filename} is corrupted, re-downloading...")
+                os.remove(filename)
+                success = download_from_google_drive(info['file_id'], filename)
+                if not success or not verify_pickle_file(filename):
+                    all_downloaded = False
     
     if all_downloaded:
         logger.info("All model files are ready!")
@@ -99,7 +146,11 @@ def verify_models():
             logger.error(f"File {filename} is empty!")
             return False
         
-        logger.info(f"✓ {filename} exists ({file_size / (1024*1024):.1f} MB)")
+        # Verify it's a valid pickle file
+        if not verify_pickle_file(filename):
+            return False
+        
+        logger.info(f"✓ {filename} exists and is valid ({file_size / (1024*1024):.1f} MB)")
     
     return True
 
